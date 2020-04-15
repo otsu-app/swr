@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useRef } from 'react'
+import React, { useCallback, useMemo, useState, useRef, useEffect } from 'react'
 
 import { cache } from './config'
 import {
@@ -53,7 +53,8 @@ function App () {
     isLoadingMore,
     isReachingEnd,
     isEmpty,
-    loadMore
+    loadMore,
+    resetPages
   } = useSWRPages(
     'project-page', // key of this page
 
@@ -118,18 +119,33 @@ export function useSWRPages<OffsetType = any, Data = any, Error = any>(
 
     // if dataList is [], we can assume this page is empty
     // TODO: this API is not stable
-    if (dataList && !dataList.length) {
-      emptyPageRef.current = true
-    } else {
-      emptyPageRef.current = false
-    }
+    emptyPageRef.current = dataList && !dataList.length
 
     return dataList
   }, [])
 
+  const resetPages = useCallback(() => {
+    setPageSWRs([])
+
+    setPageCount(() => {
+      cache.set(pageCountKey, 1)
+      return 1
+    })
+
+    setPageOffsets(() => {
+      cache.set(pageOffsetKey, [null])
+      return [null]
+    })
+    pageCacheMap.set(pageKey, [])
+  }, [pageOffsetKey, pageCountKey])
+
+  useEffect(() => {
+    resetPages()
+  }, [resetPages])
+
   // Doesn't have a next page
   const isReachingEnd = pageOffsets[pageCount] === null
-  const isLoadingMore = pageCount === pageOffsets.length
+  const isLoadingMore = pageCount > pageOffsets.length
   const isEmpty = isReachingEnd && pageCount === 1 && emptyPageRef.current
   const loadMore = useCallback(() => {
     if (isLoadingMore || isReachingEnd) return
@@ -137,7 +153,7 @@ export function useSWRPages<OffsetType = any, Data = any, Error = any>(
       cache.set(pageCountKey, c + 1)
       return c + 1
     })
-  }, [isLoadingMore || isReachingEnd])
+  }, [isLoadingMore, isReachingEnd, pageCountKey])
   const _pageFn = useCallback(pageFn, deps)
   pageFnRef.current = _pageFn
 
@@ -208,7 +224,7 @@ export function useSWRPages<OffsetType = any, Data = any, Error = any>(
       p.push(pageCache[i].component)
     }
     return p
-  }, [_pageFn, pageCount, pageSWRs, pageOffsets, pageKey])
+  }, [_pageFn, pageCount, pageSWRs, pageOffsets, pageKey, pageOffsetKey])
 
   return {
     pages,
@@ -217,6 +233,7 @@ export function useSWRPages<OffsetType = any, Data = any, Error = any>(
     isLoadingMore,
     isReachingEnd,
     isEmpty,
-    loadMore
+    loadMore,
+    resetPages
   }
 }
